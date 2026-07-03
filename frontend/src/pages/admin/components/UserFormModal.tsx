@@ -1,0 +1,337 @@
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { X, Copy, Check } from 'lucide-react';
+import { apiClient } from '../../../services/api-client';
+
+interface UserRecord {
+  userId: number;
+  employeeNumber: string;
+  fullName: string;
+  email: string;
+  branch: string;
+  roleId: number;
+  isActive: boolean;
+}
+
+interface UserFormModalProps {
+  isOpen: boolean;
+  mode: 'create' | 'edit' | 'reset';
+  user: UserRecord | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const BRANCHES = ['Yangon', 'Mandalay', 'Naypyidaw'];
+
+/**
+ * @description Modal component for creating, editing users, and resetting passwords.
+ * Supports three modes: create, edit, and reset.
+ */
+export function UserFormModal({
+  isOpen,
+  mode,
+  user,
+  onClose,
+  onSuccess,
+}: UserFormModalProps) {
+  const { t } = useTranslation();
+  const [formData, setFormData] = useState({
+    employeeNumber: '',
+    fullName: '',
+    email: '',
+    branch: 'Yangon',
+    roleId: 1,
+  });
+  const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (mode === 'edit' && user) {
+        setFormData({
+          employeeNumber: user.employeeNumber.replace(/^EMP-/, ''),
+          fullName: user.fullName,
+          email: user.email,
+          branch: user.branch,
+          roleId: user.roleId,
+        });
+      } else {
+        setFormData({
+          employeeNumber: '',
+          fullName: '',
+          email: '',
+          branch: 'Yangon',
+          roleId: 1,
+        });
+      }
+      setTemporaryPassword(null);
+      setError(null);
+      setCopied(false);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [mode, user, isOpen]);
+
+  const roleOptions = [
+    { value: 1, label: t('admin.user_form.role_options.applicant') },
+    { value: 2, label: t('admin.user_form.role_options.manager') },
+    { value: 3, label: t('admin.user_form.role_options.approver') },
+    { value: 4, label: t('admin.user_form.role_options.accounting') },
+    { value: 5, label: t('admin.user_form.role_options.admin') },
+  ];
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (mode === 'create') {
+        const usersRes = await apiClient.get('/admin/users?pageSize=100');
+        const existing = usersRes.data.data as { employeeNumber: string }[];
+        const maxNum = existing.reduce((max, u) => {
+          const m = u.employeeNumber.match(/EMP-\d+-(\d+)/);
+          return m ? Math.max(max, parseInt(m[1])) : max;
+        }, 0);
+        const year = new Date().getFullYear();
+        const employeeNumber = `EMP-${year}-${String(maxNum + 1).padStart(3, '0')}`;
+        const response = await apiClient.post('/admin/users', {
+          ...formData,
+          employeeNumber,
+        });
+        setTemporaryPassword(response.data.temporaryPassword);
+      } else if (mode === 'edit' && user) {
+        await apiClient.patch(`/admin/users/${user.userId}`, {
+          fullName: formData.fullName,
+          branch: formData.branch,
+          roleId: formData.roleId,
+        });
+        onSuccess();
+      } else if (mode === 'reset' && user) {
+        const response = await apiClient.post(
+          `/admin/users/${user.userId}/reset-password`,
+        );
+        setTemporaryPassword(response.data.temporaryPassword);
+      }
+    } catch (err: unknown) {
+      const apiError = err as { response?: { data?: { message?: string } } };
+      setError(
+        apiError.response?.data?.message ?? t('admin.user_form.error'),
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCopyPassword = () => {
+    if (temporaryPassword) {
+      navigator.clipboard.writeText(temporaryPassword);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const title =
+    mode === 'create'
+      ? t('admin.user_form.title_create')
+      : mode === 'edit'
+        ? t('admin.user_form.title_edit')
+        : t('admin.user_form.title_reset');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          <button
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-slate-600 rounded"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-6 py-4">
+          {temporaryPassword ? (
+            <div className="text-center">
+              <div className="mb-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <p className="text-sm text-emerald-700 mb-2">
+                  {t('admin.user_form.password_result.generated')}
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                  <code className="text-lg font-mono font-bold text-emerald-800 bg-white px-3 py-1 rounded border border-emerald-200">
+                    {temporaryPassword}
+                  </code>
+                  <button
+                    onClick={handleCopyPassword}
+                    className="p-1.5 text-emerald-600 hover:bg-emerald-100 rounded transition-colors"
+                    title={t('admin.user_form.password_result.copy')}
+                  >
+                    {copied ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 mb-4">
+                {t('admin.user_form.password_result.notice')}
+              </p>
+              <button
+                onClick={onSuccess}
+                className="px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors text-sm font-medium"
+              >
+                {t('admin.user_form.password_result.close')}
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              {mode !== 'reset' && (
+                <>
+                  {mode === 'edit' && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        {t('admin.user_form.labels.employee_number')}
+                      </label>
+                      <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
+                        <span className="px-2 py-2 text-sm text-slate-400 bg-slate-50 border-r border-slate-300 select-none">EMP-</span>
+                        <input
+                          type="text"
+                          value={formData.employeeNumber}
+                          disabled
+                          className="w-full px-2 py-2 text-sm text-slate-500 outline-none border-0 bg-slate-50"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      {t('admin.user_form.labels.full_name')} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.fullName}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          fullName: e.target.value,
+                        }))
+                      }
+                      required
+                       className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      {t('admin.user_form.labels.email')} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          email: e.target.value,
+                        }))
+                      }
+                      disabled={mode === 'edit'}
+                      required
+                       className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 disabled:bg-slate-50 disabled:text-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      {t('admin.user_form.labels.branch')} <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.branch}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          branch: e.target.value,
+                        }))
+                      }
+                      required
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {BRANCHES.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      {t('admin.user_form.labels.role')} <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.roleId}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          roleId: Number(e.target.value),
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {roleOptions.map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {mode === 'reset' && user && (
+                <div className="text-center py-4">
+                  <p className="text-sm text-slate-600">
+                    <span className="font-medium">{user.fullName}</span> {t('admin.user_form.reset_confirm.prompt_suffix')}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-2">
+                    {t('admin.user_form.reset_confirm.warning')}
+                  </p>
+                </div>
+              )}
+
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={onClose}
+                   className="px-4 py-2 text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
+                >
+                  {t('admin.user_form.buttons.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 transition-colors text-sm font-medium"
+                >
+                  {isLoading
+                    ? t('admin.user_form.buttons.processing')
+                    : mode === 'create'
+                      ? t('admin.user_form.buttons.create')
+                      : mode === 'edit'
+                        ? t('admin.user_form.buttons.save')
+                        : t('admin.user_form.buttons.reset')}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

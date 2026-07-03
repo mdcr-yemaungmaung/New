@@ -1,0 +1,25 @@
+#!/bin/sh
+
+# Get all staged .ts files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep ".ts$")
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+echo "Running ESLint..."
+npx eslint --fix $STAGED_FILES
+
+# Re-add formatted files
+git add $STAGED_FILES
+
+echo "Running full project verification (verify-all.sh)..."
+bash scripts/verify-all.sh
+
+VERIFY_EXIT_CODE=$?
+if [ $VERIFY_EXIT_CODE -ne 0 ]; then
+  echo "❌ Verification failed! Commit aborted. Please fix the errors and try again."
+  exit 1
+fi
+
+echo "✅ Pre-commit hook completed successfully."

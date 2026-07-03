@@ -1,0 +1,85 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/shared/ProtectedRoute';
+import { AdminRoute } from './components/guards/AdminRoute';
+import { ToastContainer } from './components/shared/Toast';
+import { ScrollToTop } from './components/shared/ScrollToTop';
+import { LoginPage } from './pages/auth/LoginPage';
+import { ApplicantDashboard } from './pages/applicant/ApplicantDashboard';
+import { ManagerDashboard } from './pages/manager/ManagerDashboard';
+import { ManagerRequestDetail } from './pages/manager/ManagerRequestDetail';
+import { ApproverDashboard } from './pages/approver/ApproverDashboard';
+import { AccountingDashboard } from './pages/accounting/AccountingDashboard';
+import { PaymentDetailPage } from './pages/accounting/PaymentDetailPage';
+import { AdminDashboardShell } from './pages/admin/AdminDashboardShell';
+import { UserManagementWorkspace } from './pages/admin/UserManagementWorkspace';
+import { MasterDataWorkspace } from './pages/admin/MasterDataWorkspace';
+import { AuditLogWorkspace } from './pages/admin/AuditLogWorkspace';
+import { RoleCode } from './types';
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <ToastContainer />
+      <Router>
+        <ScrollToTop />
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          
+          <Route path="/applicant/*" element={
+            <ProtectedRoute allowedRoles={[RoleCode.APPLICANT]}>
+              <ApplicantDashboard />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/manager" element={
+            <ProtectedRoute allowedRoles={[RoleCode.MANAGER]}>
+              <ManagerDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/manager/requests/:id" element={
+            <ProtectedRoute allowedRoles={[RoleCode.MANAGER]}>
+              <ManagerRequestDetail />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/approver/*" element={
+            <ProtectedRoute allowedRoles={[RoleCode.APPROVER]}>
+              <ApproverDashboard />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/accounting" element={
+            <ProtectedRoute allowedRoles={[RoleCode.ACCOUNTING]}>
+              <AccountingDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/accounting/payment/:id" element={
+            <ProtectedRoute allowedRoles={[RoleCode.ACCOUNTING]}>
+              <PaymentDetailPage />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/admin" element={<AdminRoute />}>
+            <Route element={<AdminDashboardShell />}>
+              <Route path="users" element={<UserManagementWorkspace />} />
+              <Route path="master-data" element={<MasterDataWorkspace />} />
+              <Route path="audit-logs" element={<AuditLogWorkspace />} />
+              <Route index element={<Navigate to="users" replace />} />
+            </Route>
+          </Route>
+          
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/unauthorized" element={
+            <div className="flex h-screen items-center justify-center bg-slate-50">
+              <div className="bg-white p-8 rounded-xl shadow text-center">
+                <h1 className="text-2xl font-bold text-red-600 mb-2">Unauthorized</h1>
+                <p className="text-slate-600">You do not have permission to view this page.</p>
+              </div>
+            </div>
+          } />
+        </Routes>
+      </Router>
+    </AuthProvider>
+  );
+}

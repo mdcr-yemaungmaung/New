@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+dist/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Uploads (local development)
+uploads/
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+coverage/
+
+# Build
+build/
+docs/screens/01_applicant_dashboard/APPLICANT_04_機能設計書_FUNCTIONAL_SPEC_MM.md
+docs/translation/
+
+# Specify Plugin
+.specify/feature.json
